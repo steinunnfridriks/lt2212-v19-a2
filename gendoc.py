@@ -129,6 +129,14 @@ def matrix_builder(directory, m=None):
     return matrix_dataframe
 
 
+def cosine_similarity_same_topic():
+
+
+
+def cosine_similarity_other_topic():
+
+
+
 #import pdb;pdb.set_trace()
 vocabulary(args.foldername, args.basedims)
 preprocessing_and_labeling(args.foldername, args.basedims)
@@ -168,7 +176,6 @@ matrix_builder(args.foldername, args.basedims)
 #Cosine similarity should be between 0 and 1 between two specific vectors.
 #nested for loop.
 
-#def cosine_similarity_same_topic():
 
 #Calculate the average cosine similarity of each vector of a specific topic
 #compared to every vector of the other topic (other folder), averaged over
