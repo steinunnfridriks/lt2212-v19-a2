@@ -7,47 +7,6 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfTransformer
 import re
 
-# gendoc.py -- Don't forget to put a reasonable amount code comments
-# in so that we better understand what you're doing when we grade!
-
-# add whatever additional imports you may need here
-
-parser = argparse.ArgumentParser(description="Generate term-document matrix.")
-parser.add_argument("-T", "--tfidf", action="store_true", help="Apply tf-idf to the matrix.")
-parser.add_argument("-S", "--svd", metavar="N", dest="svddims", type=int,
-                    default=None,
-                    help="Use TruncatedSVD to truncate to N dimensions")
-parser.add_argument("-B", "--base-vocab", metavar="M", dest="basedims",
-                    type=int, default=None,
-                    help="Use the top M dims from the raw counts before further processing")
-parser.add_argument("foldername", type=str,
-                    help="The base folder name containing the two topic subfolders.")
-parser.add_argument("outputfile", type=str,
-                    help="The name of the output file for the matrix data.")
-
-args = parser.parse_args()
-
-print("Loading data from directory {}.".format(args.foldername))
-
-if not args.basedims:
-    print("Using full vocabulary.")
-else:
-    print("Using only top {} terms by raw count.".format(args.basedims))
-
-if args.tfidf:
-    print("Applying tf-idf to raw counts.")
-
-if args.svddims:
-    print("Truncating matrix to {} dimensions via singular value decomposition.".format(args.svddims))
-
-# THERE ARE SOME ERROR CONDITIONS YOU MAY HAVE TO HANDLE WITH CONTRADICTORY
-# PARAMETERS.
-
-print("Writing matrix to {}.".format(args.outputfile))
-
-
-
-#___________________
 #Create a vocabulary (making a list of every word that occurs in every document)
 #Go through and count all the words in every document. Every vector should
 #have every word, even if the vector doesn't contain that word (then it has the
@@ -57,6 +16,7 @@ print("Writing matrix to {}.".format(args.outputfile))
 #vector twice, once to compare with every vector from the same topic and once
 #to compare to every vector from the other topic.
 #Eliminate duplicate vectors - keep track of where they came from!
+
 
 def vocabulary(directory, m=None):
     """Creates a vocabulary list which contains all words from all documents"""
@@ -72,7 +32,12 @@ def vocabulary(directory, m=None):
                 for word in get_words:
                     if word not in vocabulary_list:
                         vocabulary_list.append(word)
-    return vocabulary_list
+    if m is not None:
+        vocabulary = vocabulary_list[:m]
+    else:
+        vocabulary = vocabulary_list
+
+    return vocabulary
 
 
 def preprocessing_and_labeling(directory, m=None):
@@ -104,7 +69,7 @@ def preprocessing_and_labeling(directory, m=None):
 def vector_creator(directory, m=None):
     """Append every value (which is a word count) from the word_counts
     dictionary into lists which are the vectors. Every list should then be
-    added into an array which is then converted into a dataframe from pandas"""
+    added into an array which is later converted into a dataframe from pandas"""
     supreme_dictionary = preprocessing_and_labeling(directory, m)
 
     for label in supreme_dictionary.keys():
@@ -117,68 +82,102 @@ def vector_creator(directory, m=None):
 
 
 def matrix_builder(directory, m=None):
-    """Convert darth vader into an array, and the array into a dataframe"""
+    """Convert the dictionary into a padas dataframe to be written into
+    the output file. Dropping duplicate vectors."""
     darth_vader = vector_creator(directory, m)
-    #matrix_array = np.array(darth_vader)
-    column_names = vocabulary(directory, m)
     supreme_dictionary = preprocessing_and_labeling(directory, m)
+    matrix_dataframe = pd.DataFrame.from_dict(darth_vader, orient='index')
+    list_of_duplicates = matrix_dataframe[matrix_dataframe.duplicated()].index.tolist()
+    matrix_dataframe = matrix_dataframe.drop_duplicates()
+    print("These duplicated vectors have been dropped:")
+    for duplicate in list_of_duplicates:
+        print(duplicate)
 
-    matrix_dataframe = pd.DataFrame.from_dict(darth_vader, orient='index', dtype=None, columns=column_names)
-
-    print(matrix_dataframe)
     return matrix_dataframe
 
 
-def cosine_similarity_same_topic():
+def make_tfidf(dataframe):
+    """Turns the dataframe into tf-idf (term-frequency times inverse
+    document-frequency) values after filtering vocabulary by setting -Bm"""
+    tfidf_values = TfidfTransformer().fit_transform(dataframe) #transforms the dataframe into tfidf
+    tfidf_data = tfidf_values.toarray()
+    words = dataframe.keys()
+    filenames = dataframe.index.values
+    tfidf_data = pd.DataFrame(tfidf_data, columns=words, index=filenames)
+    return dataframe
 
 
+def make_svd(output_dataframe, N):
+    """Turns the dataframe into into a document matrix with a feature space of
+    dimensionality n. Singular value decomposition - used to exclude the least
+    significant components of a vector"""
+    svd = TruncatedSVD(N)
+    svd_dataframe = svd.fit_transform(dataframe)
 
-def cosine_similarity_other_topic():
+    return dataframe
 
 
+def file_creator(dataframe, directory, m=None):
+    """Creating the outputfile"""
+    column_names = vocabulary(directory, m)
+    dataframe = dataframe.to_csv(args.outputfile, index_label=column_names)
+    return dataframe
 
-#import pdb;pdb.set_trace()
+
+#then modify README.md in Markdown to contain:
+
+# Your name, in case that's not obvious from your github account.
+# What you chose for the vocabulary restriction in (2) above, with a short justification.
+# A table containing the output values from simdoc.py for each of the files (1)-(8), organized in a meaningful way.
+# In your own words, write down what you think the hypothesis of this experiment was. (1 paragraph)
+# A brief discussion of any trends you may see in the data, or lack thereof (possible), in light of the hypothesis you wrote down. (1 paragraph)
+
+#____________________________________________________________
+parser = argparse.ArgumentParser(description="Generate term-document matrix.")
+parser.add_argument("-T", "--tfidf", action="store_true", help="Apply tf-idf to the matrix.")
+parser.add_argument("-S", "--svd", metavar="N", dest="svddims", type=int,
+                    default=None,
+                    help="Use TruncatedSVD to truncate to N dimensions")
+parser.add_argument("-B", "--base-vocab", metavar="M", dest="basedims",
+                    type=int, default=None,
+                    help="Use the top M dims from the raw counts before further processing")
+parser.add_argument("foldername", type=str,
+                    help="The base folder name containing the two topic subfolders.")
+parser.add_argument("outputfile", type=str,
+                    help="The name of the output file for the matrix data.")
+
+args = parser.parse_args()
+
+print("Loading data from directory {}.".format(args.foldername))
+
 vocabulary(args.foldername, args.basedims)
 preprocessing_and_labeling(args.foldername, args.basedims)
 vector_creator(args.foldername, args.basedims)
-matrix_builder(args.foldername, args.basedims)
+dataframe = matrix_builder(args.foldername, args.basedims)
+file_creator(dataframe, args.foldername, args.basedims)
 
-#USE PANDAS. The vectors are brics. brics.index = each document.
-#Can txt be converted into csv file? brics = pd.read_csv("path_to_file.csv", index_col = 0)
-#pd.DataFrame(dictionary/brics) = to get the table
-#brics[["word"]] = to get the column (specific word)
-#brics[1:2] = slice, row number 1 (specific document)
-#brics.loc[[document1]] = to select one (or more) vector. iloc = same except with index (not labels).
+if not args.basedims:
+    print("Using full vocabulary.")
+else:
+    print("Using only top {} terms by raw count.".format(args.basedims))
 
-#Find a way to make each document into an array
-#where the numbers are the word counts. For every word in vocabulary, create an
-#array with the counts from a particular document.
+if args.tfidf:
+    print("Applying tf-idf to raw counts.")
+    output_dataframe = make_tfidf(dataframe)
 
+if args.svddims:
+    print("Truncating matrix to {} dimensions via singular value decomposition.".format(args.svddims))
+    if args.tfidf:
+        # Selecting both TF-IDF and SVF
+        output_dataframe = pd.DataFrame(output_dataframe)
+        output_dataframe = make_svd(output_dataframe, args.svddims)
+    else:
+        output = make_svd(dataframe, args.svddims)
 
-#Create a matrix where every word in every document is counted, even if it has
-#the count of 0. This is the vector space. The rows are the documents and the
-#columns are the words. Each document is a vector containing the word counts
-#so document 1 [1,2,3] document 2 [2,0,5] might be two vectors where the
-#first number (column) is the count for the word "and", the second number is
-#the count for the word "is", etc.
-
-
-
-
-
-#create a dataframe from the dictionaries?
-#OR convert the dictionaries into vectors and every vector goes into an array
-#then make a dataframe from the array
+if args.basedims and args.svddims:
+    if args.basedims <= args.svddims:
+        print("Singular value decomposition dimentionality cannot be higher than the vocabulary size")
+        exit(1)
 
 
-#Calculate the average cosine similarity of each vector of a specific topic
-#compared to every vector of the same topic, averaged over the entire topic.
-#Cosine similarity should be between 0 and 1 between two specific vectors.
-#nested for loop.
-
-
-#Calculate the average cosine similarity of each vector of a specific topic
-#compared to every vector of the other topic (other folder), averaged over
-#the entire topic.
-
-#def consine_similarity_other_topic():
+print("Writing matrix to {}.".format(args.outputfile))
