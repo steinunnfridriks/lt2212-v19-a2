@@ -6,6 +6,8 @@ import pandas as pd
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfTransformer
 import re
+from nltk.tokenize import RegexpTokenizer
+import nltk
 
 #Create a vocabulary (making a list of every word that occurs in every document)
 #Go through and count all the words in every document. Every vector should
@@ -27,40 +29,46 @@ def vocabulary(directory, m=None):
             path_to_file = os.path.join(path_to_subdirectory, file)
             with open(path_to_file, "r", encoding="utf8") as f:
                 text = f.read()
-                strip_punctuation = re.sub("!@#$%^&*()-=_+|;\'\:\,\"\.<>?\d", "", text).lower()
-                get_words = strip_punctuation.split(" ")
-                for word in get_words:
-                    if word not in vocabulary_list:
-                        vocabulary_list.append(word)
-    if m is not None:
-        vocabulary = vocabulary_list[:m]
-    else:
-        vocabulary = vocabulary_list
+                lowercase = text.lower()
+                tokenizer = RegexpTokenizer(r'\w+')
+                strip_punct = tokenizer.tokenize(lowercase)
+                for word in strip_punct:
+                    vocabulary_list.append(word)
 
-    return vocabulary
+    vocab_dict = dict(nltk.FreqDist(vocabulary_list))
+    frequency = [(word,vocab_dict[word]) for word in sorted(vocab_dict, key=vocab_dict.get,reverse=True)]
+
+    if m is not None:
+        vocabulary = frequency[:m]
+    else:
+        vocabulary = frequency
+
+    final_vocabulary = []
+    for word, frequency in vocabulary:
+        final_vocabulary.append(word)
+
+    return final_vocabulary
 
 
 def preprocessing_and_labeling(directory, m=None):
     """Creates a top dictionary containing the topic + document names as keys and dictionaries as values.
     Those dictionaries contain words as keys and the word counts as values."""
     label_maker = {}
+    vocab = vocabulary(directory, m)
+    vocab_dict = dict.fromkeys(vocab,0)
+
     for topic in os.listdir(directory):
         path_to_subdirectory = os.path.join(directory, topic)
-        vocab = vocabulary(directory, m)
-        vocab_dict = dict.fromkeys(vocab,0)
-
         for file in os.listdir(path_to_subdirectory):
             path_to_file = os.path.join(path_to_subdirectory, file)
             word_counts = vocab_dict.copy()
-
             with open(path_to_file, "r", encoding="utf8") as f:
                 text = f.read()
-                strip_punctuation = re.sub("!@#$%^&*()-=_+|;\'\:\,\"\.<>?\d", "", text).lower()
-                get_words = strip_punctuation.split(" ")
-                for word in get_words:
-                    if word not in word_counts:
-                        word_counts[word] = 1
-                    else:
+                lowercase = text.lower()
+                tokenizer = RegexpTokenizer(r'\w+')
+                strip_punct = tokenizer.tokenize(lowercase)
+                for word in strip_punct:
+                    if word in vocab:
                         word_counts[word] += 1
             label_maker[topic+" "+file] = word_counts
     return label_maker
@@ -85,8 +93,8 @@ def matrix_builder(directory, m=None):
     """Convert the dictionary into a padas dataframe to be written into
     the output file. Dropping duplicate vectors."""
     darth_vader = vector_creator(directory, m)
-    supreme_dictionary = preprocessing_and_labeling(directory, m)
-    matrix_dataframe = pd.DataFrame.from_dict(darth_vader, orient='index')
+    column_names = vocabulary(directory, m)
+    matrix_dataframe = pd.DataFrame.from_dict(darth_vader, orient='index',  dtype=None, columns=column_names) #I know this doesn't run on the server but after almost a month of trying to work around it, it's the best I can come up with
     list_of_duplicates = matrix_dataframe[matrix_dataframe.duplicated()].index.tolist()
     matrix_dataframe = matrix_dataframe.drop_duplicates()
     print("These duplicated vectors have been dropped:")
@@ -96,31 +104,25 @@ def matrix_builder(directory, m=None):
     return matrix_dataframe
 
 
-def make_tfidf(dataframe):
-    """Turns the dataframe into tf-idf (term-frequency times inverse
-    document-frequency) values after filtering vocabulary by setting -Bm"""
-    tfidf_values = TfidfTransformer().fit_transform(dataframe) #transforms the dataframe into tfidf
-    tfidf_data = tfidf_values.toarray()
-    words = dataframe.keys()
-    filenames = dataframe.index.values
-    tfidf_data = pd.DataFrame(tfidf_data, columns=words, index=filenames)
-    return dataframe
-
-
-def make_svd(output_dataframe, N):
+def make_svd(directory, output_dataframe, outputfile, N, m=None):
     """Turns the dataframe into into a document matrix with a feature space of
     dimensionality n. Singular value decomposition - used to exclude the least
     significant components of a vector"""
+    darth_vader = vector_creator(directory, m)
+    darth_vader_array = np.array(list(darth_vader.values()),dtype=float)
+    words = dataframe.keys()
+    filenames = dataframe.index.values
     svd = TruncatedSVD(N)
-    svd_dataframe = svd.fit_transform(dataframe)
+    svd_fit = svd.fit_transform(darth_vader_array)
+    svd_dataframe = pd.DataFrame(svd_fit, index=filenames, columns=words)
+    svd_dataframe.to_csv(outputfile, encoding="utf-8")
 
     return dataframe
 
 
 def file_creator(dataframe, directory, m=None):
     """Creating the outputfile"""
-    column_names = vocabulary(directory, m)
-    dataframe = dataframe.to_csv(args.outputfile, index_label=column_names)
+    dataframe = dataframe.to_csv(args.outputfile)
     return dataframe
 
 
@@ -163,16 +165,34 @@ else:
 
 if args.tfidf:
     print("Applying tf-idf to raw counts.")
-    output_dataframe = make_tfidf(dataframe)
+    tfidf_values = TfidfTransformer().fit_transform(dataframe) #transforms the dataframe into tfidf
+    tfidf_data = tfidf_values.toarray()
+    words = dataframe.keys()
+    filenames = dataframe.index.values
+    tfidf_data = pd.DataFrame(tfidf_data, columns=words, index=filenames)
+    tfidf_data.to_csv(args.outputfile, encoding="utf8")
 
 if args.svddims:
     print("Truncating matrix to {} dimensions via singular value decomposition.".format(args.svddims))
     if args.tfidf:
         # Selecting both TF-IDF and SVF
-        output_dataframe = pd.DataFrame(output_dataframe)
-        output_dataframe = make_svd(output_dataframe, args.svddims)
+        tfidf_values = TfidfTransformer().fit_transform(dataframe) #transforms the dataframe into tfidf
+        tfidf_data = tfidf_values.toarray()
+        words = dataframe.keys()
+        filenames = dataframe.index.values
+        tfidf_data = pd.DataFrame(tfidf_data, columns=words, index=filenames)
+        svd = TruncatedSVD(args.svddims)
+        svd_fit = svd.fit_transform(tfidf_data)
+        svd_dataframe = pd.DataFrame(svd_fit, index=filenames)
+        svd_dataframe.to_csv(args.outputfile, encoding="utf-8")
     else:
-        output = make_svd(dataframe, args.svddims)
+        darth_vader = vector_creator(args.foldername, args.basedims)
+        row_labels = [x for x in darth_vader.keys()]
+        darth_vader_array = np.array(list(darth_vader.values()),dtype=float)
+        svd = TruncatedSVD(args.svddims)
+        svd_fit = svd.fit_transform(darth_vader_array)
+        svd_dataframe = pd.DataFrame(svd_fit, index=row_labels)
+        svd_dataframe.to_csv(args.outputfile, encoding="utf-8")
 
 if args.basedims and args.svddims:
     if args.basedims <= args.svddims:

@@ -19,31 +19,45 @@ print("Reading matrix from {}.".format(args.vectorfile))
 
 #_________________________________________________
 
-def file_to_dataframe(vectorfile):
+def file_to_array(vectorfile):
     """Getting the dataframe from the outputfile from gendoc"""
-    dataframe = pd.read_csv(vectorfile, index=False)
-    #clean_dataframe = dataframe.drop([0,2])
-    #clean_dataframe = dataframe.reset_index(drop=True)
+    dataframe = pd.read_csv(vectorfile)
+    clean = dataframe.drop(dataframe.columns[0], axis=1)
+    array = np.array(clean)
+    return array
 
-    print(clean_dataframe)
-    return dataframe
+def get_range(vectorfile):
+    crude = []
+    grain = []
+    total_len = []
+    dataframe = pd.read_csv(vectorfile)
+    for label in dataframe[dataframe.columns[0]]:
+        total_len.append(label)
+        if "crude" in label:
+            crude.append(label)
+        elif label==int:
 
 
-def cosine_similarity_topic_crude(vectorfile):
+        else:
+            grain.append(label)
+
+    return len(crude), len(grain), len(total_len)
+
+
+def cosine_similarity_topic_crude(array_to_work_with, len_crude):
     """Calculates the average cosine similarity of each vector of topic crude
     compared to every vector of the same topic, averaged over the entire topic"""
     cosine_similarity_result = []
-    cut_df = file_to_dataframe(vectorfile)
 
     # nested loop for cosine similarity for the matrix
-    for index in range(0,578):
+    for index in range(0,len_crude):
         # Gets the first vector to be used in the cosine similiarity calculations
         #print("- vector1 [" +str(index)+":"+str(index+1)+"]" )
-        vector1 = cut_df[index:index+1]
-        for innerindex in range(0,578):
+        vector1 = array_to_work_with[index:index+1]
+        for innerindex in range(0,len_crude):
             # Gets the second vector to be used
             #print("  *vector2 [" +str(innerindex)+":"+str(innerindex+1)+"]" )
-            vector2 = cut_df[innerindex:innerindex+1]
+            vector2 = array_to_work_with[innerindex:innerindex+1]
             # Computes the cosine similarity between vector 1 and vector 2
             value = cosine_similarity(vector1, vector2, dense_output=True)
             cosine_similarity_result.append(value[0][0])
@@ -54,21 +68,20 @@ def cosine_similarity_topic_crude(vectorfile):
     return average_cosine_similarity_crude
 
 
-def cosine_similarity_topic_grain(vectorfile):
+def cosine_similarity_topic_grain(array_to_work_with, len_grain, total_len):
     """Calculates the average cosine similarity of each vector of topic grain
     compared to every vector of the same topic, averaged over the entire topic"""
     cosine_similarity_result = []
-    cut_df = file_to_dataframe(vectorfile)
 
     # nested loop for cosine similarity for the matrix
-    for index in range(578,1160):
+    for index in range(len_grain, total_len):
         # Gets the first vector to be used in the cosine similiarity calculations
         #print("- vector1 [" +str(index)+":"+str(index+1)+"]" )
-        vector1 = cut_df[index:index+1]
-        for innerindex in range(578,1160):
+        vector1 = array_to_work_with[index:index+1]
+        for innerindex in range(len_grain, total_len):
             # Gets the second vector to be used
             #print("  *vector2 [" +str(innerindex)+":"+str(innerindex+1)+"]" )
-            vector2 = cut_df[innerindex:innerindex+1]
+            vector2 = array_to_work_with[innerindex:innerindex+1]
             # Computes the cosine similarity between vector 1 and vector 2
             value = cosine_similarity(vector1, vector2, dense_output=True)
             cosine_similarity_result.append(value[0][0])
@@ -80,22 +93,21 @@ def cosine_similarity_topic_grain(vectorfile):
 
 
 
-def cosine_similarity_crude_to_grain(vectorfile):
+def cosine_similarity_crude_to_grain(array_to_work_with, len_crude, len_grain, total_len):
     """Calculate the average cosine similarity of each vector of a specific topic
     compared to every vector of the other topic (other folder), averaged over
     the entire topic"""
     cosine_similarity_result = []
-    cut_df = file_to_dataframe(vectorfile)
 
     # nested loop for cosine similarity for the matrix
-    for index in range(0,578):
+    for index in range(0,len_crude):
         # Gets the first vector to be used in the cosine similiarity calculations
         #print("- vector1 [" +str(index)+":"+str(index+1)+"]" )
-        vector1 = cut_df[index:index+1]
-        for innerindex in range(578,1160):
+        vector1 = array_to_work_with[index:index+1]
+        for innerindex in range(len_grain, total_len):
             # Gets the second vector to be used
             #print("  *vector2 [" +str(innerindex)+":"+str(innerindex+1)+"]" )
-            vector2 = cut_df[innerindex:innerindex+1]
+            vector2 = array_to_work_with[innerindex:innerindex+1]
             # Computes the cosine similarity between vector 1 and vector 2
             value = cosine_similarity(vector1, vector2, dense_output=True)
             cosine_similarity_result.append(value[0][0])
@@ -106,22 +118,21 @@ def cosine_similarity_crude_to_grain(vectorfile):
     return average_cosine_similarity_crude_to_grain
 
 
-def cosine_similarity_grain_to_crude(vectorfile):
+def cosine_similarity_grain_to_crude(array_to_work_with, len_grain, len_crude, total_len):
     """Calculate the average cosine similarity of each vector of a specific topic
     compared to every vector of the other topic (other folder), averaged over
     the entire topic"""
     cosine_similarity_result = []
-    cut_df = file_to_dataframe(vectorfile)
 
     # nested loop for cosine similarity for the matrix
-    for index in range(578,1160):
+    for index in range(len_grain, total_len):
         # Gets the first vector to be used in the cosine similiarity calculations
         #print("- vector1 [" +str(index)+":"+str(index+1)+"]" )
-        vector1 = cut_df[index:index+1]
-        for innerindex in range(0,578):
+        vector1 = array_to_work_with[index:index+1]
+        for innerindex in range(0,len_crude):
             # Gets the second vector to be used
             #print("  *vector2 [" +str(innerindex)+":"+str(innerindex+1)+"]" )
-            vector2 = cut_df[innerindex:innerindex+1]
+            vector2 = array_to_work_with[innerindex:innerindex+1]
             # Computes the cosine similarity between vector 1 and vector 2
             value = cosine_similarity(vector1, vector2, dense_output=True)
             cosine_similarity_result.append(value[0][0])
@@ -133,11 +144,12 @@ def cosine_similarity_grain_to_crude(vectorfile):
 
 
 
-file_to_dataframe(args.vectorfile)
-cosine_similarity_topic_crude(args.vectorfile)
-cosine_similarity_topic_grain(args.vectorfile)
-cosine_similarity_crude_to_grain(args.vectorfile)
-cosine_similarity_grain_to_crude(args.vectorfile)
+array_to_work_with = file_to_array(args.vectorfile)
+len_crude, len_grain, total_len = get_range(args.vectorfile)
+cosine_similarity_topic_crude(array_to_work_with, len_crude)
+cosine_similarity_topic_grain(array_to_work_with, len_grain, total_len)
+cosine_similarity_crude_to_grain(array_to_work_with, len_crude, len_grain, total_len)
+cosine_similarity_grain_to_crude(array_to_work_with, len_crude, len_grain, total_len)
 
 #Calculate the average cosine similarity of each vector of a specific topic
 #compared to every vector of the same topic, averaged over the entire topic.
